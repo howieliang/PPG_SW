@@ -1,2 +1,3 @@
 # PPG_SW
-Photoplethysmogram (PPG) Software for 17Q4 Sensors for Physiology
+Photoplethysmogram (PPG) Software:
+Sensors for Physiology 17Q4 
