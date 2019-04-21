@@ -37,6 +37,11 @@ float currHR = 0;
 ArrayList<Float> SDNNList;
 float currSDNN = 0;
 
+//Filtering
+float ratio = 0.25;
+float IBI_UB = 1500; //40 bpm
+float IBI_LB = 400; //150 bpm
+
 void setup() {
   size(500, 500);
 
@@ -102,11 +107,13 @@ void draw() {
     textAlign(RIGHT, CENTER);
     text(60*scale+"s", width, 4.9*h);
   }
+  
+  int visLength = min(IBIList.size(), min(HRList.size(), SDNNList.size()));
 
   if (IBIList!=null) { 
     float lastX = 0;
     float lastY = 0;
-    for (int i = 0; i < IBIList.size(); i++) {
+    for (int i = 0; i < visLength; i++) {
       float ibi = IBIList.get(i);
       float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
       float y = map(ibi, 0, 1500, 0, h);
@@ -120,7 +127,7 @@ void draw() {
   if (HRList!=null) {
     float lastX = 0;
     float lastY = 0;
-    for (int i = 0; i < IBIList.size(); i++) {
+    for (int i = 0; i < visLength; i++) {
       float ibi = IBIList.get(i);
       float hr = HRList.get(i);
       float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
@@ -135,7 +142,7 @@ void draw() {
   if (SDNNList!=null) {
     float lastX = 0;
     float lastY = 0;
-    for (int i = 0; i < IBIList.size(); i++) {
+    for (int i = 0; i < visLength; i++) {
       float ibi = IBIList.get(i);
       float sdnn = SDNNList.get(i);
       float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;

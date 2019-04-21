@@ -41,6 +41,12 @@ PrintWriter output;
 boolean bSave = false;
 int fileID = 0;
 
+//Filtering
+int lastIBI = 0;
+float ratio = 0.25;
+float IBI_UB = 1500; //40 bpm
+float IBI_LB = 400; //150 bpm
+
 void setup() {
   size(500, 500);
 
@@ -108,14 +114,22 @@ void draw() {
     text(60*scale+"s", width, 4.9*h);
   }
 
+  int visLength = min(IBIList.size(), min(HRList.size(), SDNNList.size()));
+
   if (IBIList!=null) { 
     float lastX = 0;
     float lastY = 0;
-    for (int i = 0; i < IBIList.size(); i++) {
+    for (int i = 0; i < visLength; i++) {
       float ibi = IBIList.get(i);
       float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
       float y = map(ibi, 0, 1500, 0, h);
-      stroke(255, 0, 0);
+      if (ibi > 0) {
+        stroke(255, 0, 0);
+      } else {
+        stroke(255, 0, 255);
+        x = map(-ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
+        y = map(-ibi, 0, 1500, 0, h);
+      }
       line(lastX, 3*h, lastX, 3*h-y); 
       lastX+=x;
       lastY=y;
@@ -125,27 +139,37 @@ void draw() {
   if (HRList!=null) {
     float lastX = 0;
     float lastY = 0;
-    for (int i = 0; i < IBIList.size(); i++) {
+    for (int i = 0; i < visLength; i++) {
       float ibi = IBIList.get(i);
       float hr = HRList.get(i);
       float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
       float y = map(hr, 0, 120, 0, h);
-      stroke(0, 255, 255);
+      if (ibi > 0) {
+        stroke(0, 255, 255);
+      } else {
+        stroke(255, 0, 255);
+        x = map(-ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
+      }
       line(lastX, 4*h, lastX, 4*h-y); 
       lastX+=x;
       lastY=y;
     }
   }
-  
+
   if (SDNNList!=null) {
     float lastX = 0;
     float lastY = 0;
-    for (int i = 0; i < IBIList.size(); i++) {
+    for (int i = 0; i < visLength; i++) {
       float ibi = IBIList.get(i);
       float sdnn = SDNNList.get(i);
       float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
       float y = map(sdnn, 0, 100, 0, h);
-      stroke(0, 255, 0);
+      if (ibi > 0) {
+        stroke(0, 255, 0);
+      } else {
+        stroke(255, 0, 255);
+        x = map(-ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
+      }
       line(lastX, 5*h, lastX, 5*h-y); 
       lastX+=x;
       lastY=y;
@@ -163,7 +187,10 @@ void draw() {
   if (bSave) {
     String fileName = month()+"-"+day()+"-"+hour()+"-"+minute()+"-"+second()+".txt";
     output = createWriter(dataPath("")+"/"+fileName);
-    for (float d : IBIList) output.println(nf(d/1000., 1, 3));
+    for (float d : IBIList){ 
+      if(d>0) output.println(nf(d/1000., 1, 3));
+      else output.println(nf(-d/1000., 1, 3));
+    }
     output.flush(); // Writes the remaining data to the file
     output.close(); // Finishes the file
     println("File Saved: "+fileName);
@@ -196,19 +223,33 @@ void serialEvent(Serial port) {
         appendArray(beatHist, 1); //store the data to history (for visualization)
         if (lastBeatTime>0) {
           currIBI = ts-lastBeatTime;
-          if (IBIList.size() < maxFileSize) { 
-            IBIList.add((float)currIBI); //add the currIBI to the IBIList
-            currHR = nextValueHR((float)currIBI);
-            if (HRList.size()<HR_WINDOW) {
-              HRList.add((float)0);
-            } else {
-              HRList.add(currHR);
+          if (IBIList.size() < maxFileSize) {
+            boolean flagAB = false; // abnormal beat
+            //check ther filter
+            float diff = (float)abs(currIBI-lastIBI);
+            float diffRatio = (lastIBI == 0 ? 1: diff/(float)lastIBI);
+            if (diffRatio>ratio && IBIList.size()>0) {
+              flagAB = true;
             }
-            currSDNN = nextValueSDNN((float)currIBI);
-            if (SDNNList.size()<SDNN_WINDOW) {
-              SDNNList.add((float)0);
+            if (!flagAB) {
+              IBIList.add((float)currIBI); //add the currIBI to the IBIList
+              currHR = nextValueHR((float)currIBI);
+              if (HRList.size()<HR_WINDOW) {
+                HRList.add((float)0);
+              } else {
+                HRList.add(currHR);
+              }
+              currSDNN = nextValueSDNN((float)currIBI);
+              if (SDNNList.size()<SDNN_WINDOW) {
+                SDNNList.add((float)0);
+              } else {
+                SDNNList.add(currSDNN);
+              }
+              lastIBI = currIBI;
             } else {
+              IBIList.add((float)-currIBI); //add the currIBI to the IBIList
               SDNNList.add(currSDNN);
+              HRList.add(currHR);
             }
           }
         } 
