@@ -1,6 +1,6 @@
 //*********************************************
 // Time-Series Physiological Signal Processing
-// e8_TimeSeriesData_IBISave
+// e9_TimeSeriesData_IBILoad
 // Rong-Hao Liang: r.liang@tue.nl
 //*********************************************
 //Before use, please make sure your Arduino has 1 sensor connected
@@ -39,7 +39,10 @@ float currSDNN = 0;
 
 PrintWriter output;
 boolean bSave = false;
-int fileID = 0;
+
+ArrayList LoadIBIList;
+ArrayList<Float> LoadSDNNList;
+ArrayList<Float> LoadHRList;
 
 //Filtering
 int lastIBI = 0;
@@ -58,10 +61,17 @@ void setup() {
   port.bufferUntil('\n'); // arduino ends each data packet with a carriage return 
   port.clear();           // flush the Serial buffer
 
+  //Reset HR and SDNN Calculation for the Files
+  LoadIBIList = loadIBIData("5-3-15-2-50.txt");
+  LoadSDNNList = getSDNNList(LoadIBIList);
+  LoadHRList = getHRList(LoadIBIList);
+
   //IBIList for LiveDrawing
   IBIList = new ArrayList<Float>();
   HRList = new ArrayList<Float>();
   SDNNList = new ArrayList<Float>();
+  initHR();
+  initSDNN();
 }
 
 void draw() {
@@ -74,107 +84,19 @@ void draw() {
   if (!bDrawOnly) {
     lineGraph(sensorHist, 0, 1023, 0, 0*h, width, h, color(255, 0, 0));
     lineGraph(beatHist, 0, 1, 0, 0*h, width, h, color(0, 0, 255));
-    fill(0);
-    textAlign(RIGHT, CENTER);
-    text("Press 'c' to restart capturing", width, 0.1*h);
-    text("Press 'd' to hide the raw data", width, 0.2*h);
-    text("Press 's' to save the data", width, 0.3*h);
-    text("Move 'MouseX' to change time scale", width, 0.4*h);
-    stroke(0);
-    line(0, 1*h, width, 1*h);
     lineGraph(IBIHist, 0, 1500, 0, 1*h, width, h, color(255, 0, 255));//History of sensor data
-    fill(0);
-    textAlign(LEFT, CENTER);
-    text("Last IBI: "+currIBI+" ms", 0, 1.1*h);
-    text("IBI collected: "+IBIList.size()+"/"+maxFileSize, 0, 1.2*h);
-    text("Time Lapsed: "+nf((float)(ts-lastCapture)/1000., 0, 1)+" (s)", 0, 1.3*h);
-    stroke(0);
-    line(0, 2*h, width, 2*h);
-    fill(0);
-    textAlign(LEFT, CENTER);
-    text("IBI", 0, 2.1*h);
-    text(0+"s", 0, 2.9*h);
-    textAlign(RIGHT, CENTER);
-    text(60*scale+"s", width, 2.9*h);
-    line(0, 3*h, width, 3*h);
-    fill(0);
-    textAlign(LEFT, CENTER);
-    if (HRList.size()<HR_WINDOW) text("Calculating Heart Rate:"+HRList.size()+"/"+HR_WINDOW, 0, 3.1*h);
-    else text("Heart Rate: "+nf(currHR, 0, 1)+" bpm", 0, 3.1*h);
-    text(0+"s", 0, 3.9*h);
-    textAlign(RIGHT, CENTER);
-    text(60*scale+"s", width, 3.9*h);
-    line(0, 4*h, width, 4*h);
-    fill(0);
-    textAlign(LEFT, CENTER);
-    if (SDNNList.size()<SDNN_WINDOW) text("Calculating SDNN:"+SDNNList.size()+"/"+SDNN_WINDOW, 0, 4.1*h);
-    else text("SDNN: "+nf(currSDNN, 0, 1)+" ms", 0, 4.1*h);
-    text(0+"s", 0, 4.9*h);
-    textAlign(RIGHT, CENTER);
-    text(60*scale+"s", width, 4.9*h);
+    drawInfo(scale, h);
   }
 
-  int visLength = min(IBIList.size(), min(HRList.size(), SDNNList.size()));
+  pushMatrix();
+  translate(0, 3*h);
+  drawLiveList(scale, h, IBIList, HRList, SDNNList);
+  popMatrix();
 
-  if (IBIList!=null) { 
-    float lastX = 0;
-    float lastY = 0;
-    for (int i = 0; i < visLength; i++) {
-      float ibi = IBIList.get(i);
-      float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
-      float y = map(ibi, 0, 1500, 0, h);
-      if (ibi > 0) {
-        stroke(255, 0, 0);
-      } else {
-        stroke(255, 0, 255);
-        x = map(-ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
-        y = map(-ibi, 0, 1500, 0, h);
-      }
-      line(lastX, 3*h, lastX, 3*h-y); 
-      lastX+=x;
-      lastY=y;
-    }
-  }
-
-  if (HRList!=null) {
-    float lastX = 0;
-    float lastY = 0;
-    for (int i = 0; i < visLength; i++) {
-      float ibi = IBIList.get(i);
-      float hr = HRList.get(i);
-      float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
-      float y = map(hr, 0, 120, 0, h);
-      if (ibi > 0) {
-        stroke(0, 255, 255);
-      } else {
-        stroke(255, 0, 255);
-        x = map(-ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
-      }
-      line(lastX, 4*h, lastX, 4*h-y); 
-      lastX+=x;
-      lastY=y;
-    }
-  }
-
-  if (SDNNList!=null) {
-    float lastX = 0;
-    float lastY = 0;
-    for (int i = 0; i < visLength; i++) {
-      float ibi = IBIList.get(i);
-      float sdnn = SDNNList.get(i);
-      float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
-      float y = map(sdnn, 0, 100, 0, h);
-      if (ibi > 0) {
-        stroke(0, 255, 0);
-      } else {
-        stroke(255, 0, 255);
-        x = map(-ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
-      }
-      line(lastX, 5*h, lastX, 5*h-y); 
-      lastX+=x;
-      lastY=y;
-    }
-  }
+  pushMatrix();
+  translate(0, 4*h);
+  drawLiveList(scale, h, LoadIBIList, LoadHRList, LoadSDNNList);
+  popMatrix();
 
   if (bClear) {
     IBIList.clear();
@@ -187,6 +109,86 @@ void draw() {
   if (bSave) {
     saveIBIFile(month()+"-"+day()+"-"+hour()+"-"+minute()+"-"+second()+".txt");
     bSave = false;
+  }
+}
+
+void drawInfo(float scale, float h) {
+  fill(0);
+  textAlign(RIGHT, CENTER);
+  text("Press 'c' to restart capturing", width, 0.1*h);
+  text("Press 'd' to hide the raw data", width, 0.2*h);
+  text("Press 's' to save the data", width, 0.3*h);
+  text("Move 'MouseX' to change time scale", width, 0.4*h);
+  stroke(0);
+  line(0, 1*h, width, 1*h);
+
+  fill(0);
+  textAlign(LEFT, CENTER);
+  text("Last IBI: "+currIBI+" ms", 0, 1.1*h);
+  text("IBI collected: "+IBIList.size()+"/"+maxFileSize, 0, 1.2*h);
+  text("Time Lapsed: "+nf((float)(ts-lastCapture)/1000., 0, 1)+" (s)", 0, 1.3*h);
+  stroke(0);
+  line(0, 2*h, width, 2*h);
+  fill(0);
+  textAlign(LEFT, CENTER);
+  text("Current IBI", 0, 2.1*h);
+  text(0+"s", 0, 2.9*h);
+  textAlign(RIGHT, CENTER);
+  text(60*scale+"s", width, 2.9*h);
+  line(0, 3*h, width, 3*h);
+  fill(0);
+  textAlign(LEFT, CENTER);
+  //text("IBI_file:"+fileNameList.get(0), 0, 3.1*h);
+  text(0+"s", 0, 3.9*h);
+  textAlign(RIGHT, CENTER);
+  text(60*scale+"s", width, 3.9*h);
+  line(0, 4*h, width, 4*h);
+}
+
+void drawLiveList(float scale, float h, ArrayList<Float> IBIList, ArrayList<Float> HRList, ArrayList<Float> SDNNList) {
+  if (IBIList!=null) {
+    float lastX = 0;
+    float lastY = 0;
+    int visLength = min(IBIList.size(), min(HRList.size(), SDNNList.size()));
+    for (int i = 0; i < visLength; i++) {
+      float ibi = IBIList.get(i);
+      float hr =  HRList.get(i);
+      float sdnn = SDNNList.get(i);
+      float x = map(ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
+      float yIBI = map(ibi, 0, 1500, 0, h);
+      float yHR = map(hr, 0, 120, 0, h);
+      float ySDNN = map(sdnn, 0, 100, 0, h);
+
+      if (ibi > 0) {
+        stroke(0, 255, 255);
+      } else {
+        stroke(255, 0, 255);
+        x = map(-ibi, 0, 60000*scale, 0, width); //60000ms = 1 min;
+        yIBI = map(-ibi, 0, 1500, 0, h);
+      }
+
+      noStroke();
+      if (ibi > 0) {
+        fill(0, 255, 255);
+      } else {
+        fill(255, 0, 255);
+      }
+      ellipse(lastX, -yHR, 10/scale, 10/scale);
+
+      noStroke();
+      if (ibi > 0) {
+        fill(0, 255, 0);
+      } else {
+        fill(255, 0, 255);
+      }
+      ellipse(lastX, -ySDNN, 10/scale, 10/scale);
+
+      stroke(255, 0, 0);
+      noFill();
+      line(lastX, 0, lastX, -yIBI); 
+      lastX+=x;
+      lastY=yIBI;
+    }
   }
 }
 
@@ -247,14 +249,14 @@ void serialEvent(Serial port) {
               } else {
                 SDNNList.add(currSDNN);
               }
-              lastIBI = currIBI;
             } else {
               IBIList.add((float)-currIBI); //add the currIBI to the IBIList
               SDNNList.add(currSDNN);
               HRList.add(currHR);
             }
+            lastIBI = currIBI;
           }
-        } 
+        }
         lastBeatTime = ts;
       } else {
         appendArray(beatHist, 0); //store the data to history (for visualization)
@@ -310,4 +312,17 @@ void keyPressed() {
   if (key == 's' || key == 'S') {
     bSave = true;
   }
+}
+
+ArrayList<Float> loadIBIData(String fileName) {
+  ArrayList<Float> ibiList = new ArrayList<Float>();
+  String lines[] = loadStrings(fileName);
+  if (lines!=null && fileName.charAt(0)!='.') {
+    for (int i = 0; i < lines.length; i++) {
+      ibiList.add(1000.*Float.parseFloat(lines[i])); //convert from s to ms
+    }
+  } else {
+    println("No such file");
+  }
+  return ibiList;
 }

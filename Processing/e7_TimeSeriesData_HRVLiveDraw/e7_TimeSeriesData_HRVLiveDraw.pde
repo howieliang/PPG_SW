@@ -102,7 +102,7 @@ void draw() {
     fill(0);
     textAlign(LEFT, CENTER);
     if (SDNNList.size()<SDNN_WINDOW) text("Calculating SDNN:"+SDNNList.size()+"/"+SDNN_WINDOW, 0, 4.1*h);
-    else text("SDNN: "+nf(currSDNN, 0, 1), 0, 4.1*h);
+    else text("SDNN: "+nf(currSDNN, 0, 1)+" ms", 0, 4.1*h);
     text(0+"s", 0, 4.9*h);
     textAlign(RIGHT, CENTER);
     text(60*scale+"s", width, 4.9*h);
